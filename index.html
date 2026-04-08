@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Quản Lý Điểm Danh - Giảng Viên</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Thêm thư viện SheetJS để xuất Excel -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        
+        :root {
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --primary: #f27024;
+            --secondary: #0ea5e9;
+            --success: #10b981;
+            --danger: #f43f5e;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-main);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            padding: 1rem;
+        }
+
+        .modern-card {
+            background: var(--card);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        .digital-clock {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--secondary);
+        }
+
+        @keyframes scanSuccess {
+            0% { border-color: transparent; }
+            50% { border-color: var(--success); box-shadow: 0 0 25px rgba(16, 185, 129, 0.1); }
+            100% { border-color: transparent; }
+        }
+        .scan-anim { 
+            animation: scanSuccess 0.8s ease-out;
+            border-width: 2px;
+        }
+
+        .sidebar-item {
+            background: #ffffff;
+            border-left: 4px solid var(--secondary);
+        }
+        
+        .btn-register {
+            background: linear-gradient(135deg, #f27024 0%, #ff8c42 100%);
+        }
+
+        .btn-excel {
+            background: #10b981;
+            transition: all 0.2s;
+        }
+        .btn-excel:hover {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-4">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center shadow-lg shadow-orange-200">
+                <span class="font-black text-white text-xl italic">F</span>
+            </div>
+            <div>
+                <h2 class="font-extrabold text-slate-800 tracking-tight leading-none text-sm">ATTENDANCE</h2>
+                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Instructor Portal</span>
+            </div>
+        </div>
+        <div id="clock" class="digital-clock text-3xl font-bold bg-white px-4 py-1.5 rounded-xl shadow-sm border border-slate-100">
+            00:00:00
+        </div>
+    </div>
+
+    <!-- Layout Chính -->
+    <div class="grid grid-cols-12 gap-4">
+        
+        <!-- CỘT TRÁI -->
+        <div class="col-span-12 lg:col-span-8 space-y-4">
+            
+            <!-- HIỂN THỊ CHÍNH -->
+            <div id="main-card" class="modern-card rounded-[2rem] p-6 h-[320px] flex flex-col items-center justify-center relative">
+                <div class="absolute top-6 left-8 flex items-center gap-2">
+                    <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <span class="text-[9px] font-bold tracking-widest text-slate-400 uppercase">Live Stream</span>
+                </div>
+
+                <div id="shift-label" class="absolute top-6 right-8 px-3 py-1 rounded-full bg-slate-50 text-slate-500 text-[9px] font-black uppercase tracking-widest border border-slate-100">
+                    Đang xác định ca...
+                </div>
+
+                <div class="flex flex-col items-center">
+                    <div class="mb-4">
+                        <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-3xl border border-slate-100">👤</div>
+                    </div>
+                    <h1 id="focus-name" class="text-4xl font-extrabold text-slate-800 mb-1 tracking-tight uppercase text-center">---</h1>
+                    <p id="focus-mssv" class="text-lg text-slate-400 font-semibold mb-6">Hệ thống sẵn sàng</p>
+                    <div id="status-badge" class="px-6 py-1.5 rounded-full bg-slate-50 text-slate-500 border border-slate-100 font-bold text-[10px] uppercase tracking-widest">
+                        Đợi quẹt thẻ...
+                    </div>
+                </div>
+            </div>
+
+            <!-- BẢNG LỊCH SỬ -->
+            <div class="modern-card rounded-[2rem] p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Lịch sử điểm danh</h3>
+                    <div class="flex gap-2">
+                        <button onclick="exportToExcel()" class="btn-excel text-white text-[9px] font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1">
+                            <span>📄</span> XUẤT EXCEL
+                        </button>
+                        <button onclick="clearHistory()" class="text-[9px] text-slate-300 hover:text-rose-500 font-bold uppercase transition-colors">Xóa</button>
+                    </div>
+                </div>
+                <div class="overflow-hidden">
+                    <table class="w-full text-[11px]">
+                        <thead>
+                            <tr class="border-b border-slate-50 text-slate-400 uppercase font-bold">
+                                <th class="pb-3 text-left">Giờ</th>
+                                <th class="pb-3 text-left">Sinh viên</th>
+                                <th class="pb-3 text-left">MSSV</th>
+                                <th class="pb-3 text-right">TT</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-rows" class="divide-y divide-slate-50"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- SIDEBAR -->
+        <div class="col-span-12 lg:col-span-4 space-y-3">
+            
+            <button onclick="openRegistration('MANUAL')" class="btn-register w-full p-4 rounded-2xl flex items-center justify-between text-white shadow-md">
+                <div class="text-left">
+                    <p class="text-[8px] font-black opacity-80 uppercase">Cấu hình</p>
+                    <h4 class="text-base font-bold uppercase tracking-tight">Đăng ký thẻ mới</h4>
+                </div>
+                <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-xl shadow-inner">🪪</div>
+            </button>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div class="modern-card p-4 rounded-2xl sidebar-item" style="border-left-color: #94a3b8;">
+                    <p class="text-[8px] font-black text-slate-400 uppercase mb-1">Sĩ số</p>
+                    <h4 id="stat-total" class="text-xl font-bold text-slate-700">40</h4>
+                </div>
+                <div class="modern-card p-4 rounded-2xl sidebar-item" style="border-left-color: var(--success);">
+                    <p class="text-[8px] font-black text-slate-400 uppercase mb-1">Có mặt</p>
+                    <h4 id="stat-present" class="text-xl font-bold text-emerald-500">0</h4>
+                </div>
+            </div>
+
+            <div class="modern-card p-4 rounded-2xl sidebar-item" style="border-left-color: var(--danger);">
+                <p class="text-[8px] font-black text-slate-400 uppercase mb-1">Vắng</p>
+                <h4 id="stat-absent" class="text-xl font-bold text-rose-500">40</h4>
+            </div>
+
+            <div class="modern-card p-6 rounded-[1.5rem] space-y-4">
+                <p class="text-[9px] font-bold text-slate-400 uppercase mb-2 tracking-widest text-center">Thông tin ca</p>
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="bg-slate-50 p-2 rounded-xl border border-slate-100 text-center">
+                        <div class="text-[7px] font-black text-slate-400 uppercase">Vào</div>
+                        <span id="shift-start" class="text-sm font-bold text-sky-600">--:--</span>
+                    </div>
+                    <div class="bg-slate-50 p-2 rounded-xl border border-slate-100 text-center">
+                        <div class="text-[7px] font-black text-slate-400 uppercase">Ra</div>
+                        <span id="shift-end" class="text-sm font-bold text-sky-600">--:--</span>
+                    </div>
+                </div>
+                <div class="pt-3 border-t border-slate-50 flex items-center justify-center gap-2">
+                    <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                    <span class="text-[8px] font-bold text-slate-400 uppercase">ESP32: Online</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL ĐĂNG KÝ -->
+    <div id="reg-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white max-w-xs w-full rounded-[2rem] p-8 shadow-2xl">
+            <h2 class="text-xl font-extrabold text-slate-800 mb-6 tracking-tight">Thẻ mới</h2>
+            <div class="space-y-4">
+                <div id="new-uid" class="bg-slate-50 p-3 rounded-xl border border-slate-100 text-orange-600 font-mono font-bold text-sm">---</div>
+                <input type="text" id="reg-name" placeholder="Họ và tên" class="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 focus:outline-none focus:border-orange-500 font-bold text-slate-700 text-xs">
+                <input type="text" id="reg-mssv" placeholder="MSSV" class="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 focus:outline-none focus:border-orange-500 font-bold text-slate-700 text-xs uppercase">
+            </div>
+            <div class="flex flex-col gap-2 mt-8">
+                <button onclick="saveRegistration()" class="bg-orange-500 text-white font-bold py-3 rounded-xl text-xs">LƯU THÔNG TIN</button>
+                <button onclick="closeModal()" class="text-slate-400 font-bold py-2 text-[10px]">HỦY</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const TOKEN = ""; 
+        const DEVICE_ID = ""; 
+
+        const SHIFTS = [
+            { id: 1, start: "07:15", end: "09:15" },
+            { id: 2, start: "09:25", end: "11:15" },
+            { id: 3, start: "12:00", end: "14:00" },
+            { id: 4, start: "14:00", end: "16:00" },
+            { id: 5, start: "16:00", end: "18:00" },
+            { id: 6, start: "18:00", end: "20:00" }
+        ];
+
+        let attendanceHistory = [];
+        let lastScannedMSSV = "";
+        let lastDetectedNewUID = "";
+
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('clock').innerText = now.toLocaleTimeString('vi-VN', { hour12: false });
+            const currentShift = SHIFTS.find(s => {
+                const [sh, sm] = s.start.split(':').map(Number);
+                const [eh, em] = s.end.split(':').map(Number);
+                const nowTotal = now.getHours() * 60 + now.getMinutes();
+                return nowTotal >= (sh * 60 + sm) && nowTotal < (eh * 60 + em);
+            });
+            const label = document.getElementById('shift-label');
+            if (currentShift) {
+                label.innerText = `CA ${currentShift.id}`;
+                document.getElementById('shift-start').innerText = currentShift.start;
+                document.getElementById('shift-end').innerText = currentShift.end;
+            }
+        }
+
+        async function syncWithEra() {
+            if (!TOKEN || !DEVICE_ID) return;
+            try {
+                const res = await fetch(`https://backend.e-ra.io/api/v1/devices/${DEVICE_ID}/latest-data`, {
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
+                });
+                const data = await res.json();
+                const name = data.find(p => p.pin === "V1")?.value || "";
+                const mssv = data.find(p => p.pin === "V2")?.value || "";
+                const present = data.find(p => p.pin === "V3")?.value || "0";
+                const total = data.find(p => p.pin === "V11")?.value || "40";
+                const newUID = data.find(p => p.pin === "V10")?.value || "0";
+
+                document.getElementById('stat-total').innerText = total;
+                document.getElementById('stat-present').innerText = present;
+                document.getElementById('stat-absent').innerText = Math.max(0, parseInt(total) - parseInt(present));
+
+                if (mssv && mssv !== lastScannedMSSV) {
+                    lastScannedMSSV = mssv;
+                    onAttendanceSuccess(name, mssv);
+                }
+                if (newUID !== "0" && newUID !== lastDetectedNewUID) {
+                    lastDetectedNewUID = newUID;
+                    openRegistration(newUID);
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        function onAttendanceSuccess(name, mssv) {
+            document.getElementById('focus-name').innerText = name;
+            document.getElementById('focus-mssv').innerText = mssv;
+            const time = new Date().toLocaleTimeString('vi-VN', { hour12: false });
+            attendanceHistory.unshift({ "Giờ": time, "Họ Tên": name, "MSSV": mssv, "Trạng Thái": "Có mặt" });
+            if (attendanceHistory.length > 20) attendanceHistory.pop();
+            renderHistory();
+            document.getElementById('main-card').classList.add('scan-anim');
+            setTimeout(() => document.getElementById('main-card').classList.remove('scan-anim'), 1000);
+        }
+
+        function renderHistory() {
+            const tbody = document.getElementById('history-rows');
+            tbody.innerHTML = attendanceHistory.map(item => `
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="py-3 text-sky-600 font-bold">${item["Giờ"]}</td>
+                    <td class="py-3 font-bold text-slate-700 uppercase">${item["Họ Tên"]}</td>
+                    <td class="py-3 text-slate-400">${item["MSSV"]}</td>
+                    <td class="py-3 text-right"><span class="bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-bold">OK</span></td>
+                </tr>
+            `).join('');
+        }
+
+        // --- HÀM XUẤT EXCEL ---
+        function exportToExcel() {
+            if (attendanceHistory.length === 0) {
+                alert("Không có dữ liệu để xuất!");
+                return;
+            }
+            
+            // Tạo một workbook mới
+            const wb = XLSX.utils.book_new();
+            // Chuyển mảng dữ liệu sang worksheet
+            const ws = XLSX.utils.json_to_sheet(attendanceHistory);
+            // Thêm worksheet vào workbook
+            XLSX.utils.book_append_sheet(wb, ws, "DiemDanh");
+            
+            // Tạo tên file theo ngày giờ hiện tại
+            const date = new Date().toLocaleDateString('vi-VN').replace(/\//g, '-');
+            const filename = `DiemDanh_${date}.xlsx`;
+            
+            // Tải file xuống
+            XLSX.writeFile(wb, filename);
+        }
+
+        function openRegistration(uid) {
+            document.getElementById('new-uid').innerText = uid;
+            document.getElementById('reg-modal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('reg-modal').style.display = 'none';
+        }
+
+        function saveRegistration() {
+            alert("Đã lưu yêu cầu đăng ký!");
+            closeModal();
+        }
+
+        function clearHistory() {
+            if(confirm("Xóa toàn bộ lịch sử hiện tại?")) {
+                attendanceHistory = [];
+                renderHistory();
+            }
+        }
+
+        setInterval(updateTime, 1000);
+        setInterval(syncWithEra, 2000);
+    </script>
+</body>
+</html>
